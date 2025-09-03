@@ -18,6 +18,106 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// GetFileContentsWithPermissionCheck creates a tool to get file contents with permission checking
+func GetFileContentsWithPermissionCheck(getClient GetClientFn, getRawClient raw.GetRawClientFn, t translations.TranslationHelperFunc, repoChecker *RepoPermissionChecker) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	originalTool, originalHandler := GetFileContents(getClient, getRawClient, t)
+	
+	return originalTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Extract owner and repo parameters for permission check
+		owner, err := RequiredParam[string](request, "owner")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		repo, err := RequiredParam[string](request, "repo")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Check repository access permission
+		if err := repoChecker.IsRepoAllowed(ctx, owner, repo); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Call the original handler if permission check passes
+		return originalHandler(ctx, request)
+	}
+}
+
+// CreateOrUpdateFileWithPermissionCheck creates a tool to create/update files with permission checking
+func CreateOrUpdateFileWithPermissionCheck(getClient GetClientFn, t translations.TranslationHelperFunc, repoChecker *RepoPermissionChecker) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	originalTool, originalHandler := CreateOrUpdateFile(getClient, t)
+	
+	return originalTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Extract owner and repo parameters for permission check
+		owner, err := RequiredParam[string](request, "owner")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		repo, err := RequiredParam[string](request, "repo")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Check repository access permission
+		if err := repoChecker.IsRepoAllowed(ctx, owner, repo); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Call the original handler if permission check passes
+		return originalHandler(ctx, request)
+	}
+}
+
+// ListCommitsWithPermissionCheck creates a tool to list commits with permission checking
+func ListCommitsWithPermissionCheck(getClient GetClientFn, t translations.TranslationHelperFunc, repoChecker *RepoPermissionChecker) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	originalTool, originalHandler := ListCommits(getClient, t)
+	
+	return originalTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Extract owner and repo parameters for permission check
+		owner, err := RequiredParam[string](request, "owner")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		repo, err := RequiredParam[string](request, "repo")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Check repository access permission
+		if err := repoChecker.IsRepoAllowed(ctx, owner, repo); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Call the original handler if permission check passes
+		return originalHandler(ctx, request)
+	}
+}
+
+// GetCommitWithPermissionCheck creates a tool to get commit details with permission checking
+func GetCommitWithPermissionCheck(getClient GetClientFn, t translations.TranslationHelperFunc, repoChecker *RepoPermissionChecker) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	originalTool, originalHandler := GetCommit(getClient, t)
+	
+	return originalTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Extract owner and repo parameters for permission check
+		owner, err := RequiredParam[string](request, "owner")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		repo, err := RequiredParam[string](request, "repo")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Check repository access permission
+		if err := repoChecker.IsRepoAllowed(ctx, owner, repo); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Call the original handler if permission check passes
+		return originalHandler(ctx, request)
+	}
+}
+
 func GetCommit(getClient GetClientFn, t translations.TranslationHelperFunc) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	return mcp.NewTool("get_commit",
 			mcp.WithDescription(t("TOOL_GET_COMMITS_DESCRIPTION", "Get details for a commit from a GitHub repository")),

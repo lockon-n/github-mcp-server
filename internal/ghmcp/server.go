@@ -50,6 +50,9 @@ type MCPServerConfig struct {
 
 	// Content window size
 	ContentWindowSize int
+
+	// AllowedRepos is a list of allowed repositories (e.g., ["repo1", "owner/repo2"])
+	AllowedRepos []string
 }
 
 const stdioServerLogPrefix = "stdioserver"
@@ -134,8 +137,11 @@ func NewMCPServer(cfg MCPServerConfig) (*server.MCPServer, error) {
 		return raw.NewClient(client, apiHost.rawURL), nil // closing over client
 	}
 
+	// Create repository permission checker
+	repoChecker := github.NewRepoPermissionChecker(cfg.AllowedRepos, getClient)
+
 	// Create default toolsets
-	tsg := github.DefaultToolsetGroup(cfg.ReadOnly, getClient, getGQLClient, getRawClient, cfg.Translator, cfg.ContentWindowSize)
+	tsg := github.DefaultToolsetGroup(cfg.ReadOnly, getClient, getGQLClient, getRawClient, cfg.Translator, cfg.ContentWindowSize, repoChecker)
 	err = tsg.EnableToolsets(enabledToolsets)
 
 	if err != nil {
@@ -186,6 +192,9 @@ type StdioServerConfig struct {
 
 	// Content window size
 	ContentWindowSize int
+
+	// AllowedRepos is a list of allowed repositories (e.g., ["repo1", "owner/repo2"])
+	AllowedRepos []string
 }
 
 // RunStdioServer is not concurrent safe.
@@ -205,6 +214,7 @@ func RunStdioServer(cfg StdioServerConfig) error {
 		ReadOnly:          cfg.ReadOnly,
 		Translator:        t,
 		ContentWindowSize: cfg.ContentWindowSize,
+		AllowedRepos:      cfg.AllowedRepos,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create MCP server: %w", err)

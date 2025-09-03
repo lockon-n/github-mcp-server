@@ -45,6 +45,17 @@ var (
 				return fmt.Errorf("failed to unmarshal toolsets: %w", err)
 			}
 
+			// Parse allowed repos from environment variable
+			var allowedRepos []string
+			allowedReposStr := viper.GetString("allowed_repos")
+			if allowedReposStr != "" {
+				allowedRepos = strings.Split(allowedReposStr, ",")
+				// Trim whitespace from each repo
+				for i, repo := range allowedRepos {
+					allowedRepos[i] = strings.TrimSpace(repo)
+				}
+			}
+
 			stdioServerConfig := ghmcp.StdioServerConfig{
 				Version:              version,
 				Host:                 viper.GetString("host"),
@@ -56,6 +67,7 @@ var (
 				EnableCommandLogging: viper.GetBool("enable-command-logging"),
 				LogFilePath:          viper.GetString("log-file"),
 				ContentWindowSize:    viper.GetInt("content-window-size"),
+				AllowedRepos:         allowedRepos,
 			}
 			return ghmcp.RunStdioServer(stdioServerConfig)
 		},

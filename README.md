@@ -1,5 +1,14 @@
 # GitHub MCP Server
 
+## Fork Modifications
+
+This fork adds repository permission control functionality to the GitHub MCP Server:
+
+- **Repository Access Control**: Added `GITHUB_ALLOWED_REPOS` environment variable to restrict access to specific repositories
+- **Security Wrappers**: All GitHub API tools now include permission checking to ensure only allowed repositories can be accessed
+- **Repository Creation Protection**: Repository creation is automatically disabled when repository restrictions are enabled for security
+- **Comprehensive Coverage**: Permission controls apply to all toolsets including issues, PRs, actions, security alerts, and notifications
+
 The GitHub MCP Server connects AI tools directly to GitHub's platform. This gives AI agents, assistants, and chatbots the ability to read repositories and code files, manage issues and PRs, analyze code, and automate workflows. All through natural language interactions.
 
 ### Use Cases

@@ -16,32 +16,31 @@ type GetGQLClientFn func(context.Context) (*githubv4.Client, error)
 
 var DefaultTools = []string{"all"}
 
-func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetGQLClientFn, getRawClient raw.GetRawClientFn, t translations.TranslationHelperFunc, contentWindowSize int) *toolsets.ToolsetGroup {
+func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetGQLClientFn, getRawClient raw.GetRawClientFn, t translations.TranslationHelperFunc, contentWindowSize int, repoChecker *RepoPermissionChecker) *toolsets.ToolsetGroup {
 	tsg := toolsets.NewToolsetGroup(readOnly)
 
-	// Define all available features with their default state (disabled)
-	// Create toolsets
+	// Create toolsets - all tools use permission checking (null-safe when repoChecker is nil)
 	repos := toolsets.NewToolset("repos", "GitHub Repository related tools").
 		AddReadTools(
 			toolsets.NewServerTool(SearchRepositories(getClient, t)),
-			toolsets.NewServerTool(GetFileContents(getClient, getRawClient, t)),
-			toolsets.NewServerTool(ListCommits(getClient, t)),
+			toolsets.NewServerTool(GetFileContentsWithPermissionCheck(getClient, getRawClient, t, repoChecker)),
+			toolsets.NewServerTool(ListCommitsWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(SearchCode(getClient, t)),
-			toolsets.NewServerTool(GetCommit(getClient, t)),
-			toolsets.NewServerTool(ListBranches(getClient, t)),
-			toolsets.NewServerTool(ListTags(getClient, t)),
-			toolsets.NewServerTool(GetTag(getClient, t)),
-			toolsets.NewServerTool(ListReleases(getClient, t)),
-			toolsets.NewServerTool(GetLatestRelease(getClient, t)),
-			toolsets.NewServerTool(GetReleaseByTag(getClient, t)),
+			toolsets.NewServerTool(GetCommitWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListBranchesWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListTagsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetTagWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListReleasesWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetLatestReleaseWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetReleaseByTagWithPermissionCheck(getClient, t, repoChecker)),
 		).
 		AddWriteTools(
-			toolsets.NewServerTool(CreateOrUpdateFile(getClient, t)),
-			toolsets.NewServerTool(CreateRepository(getClient, t)),
-			toolsets.NewServerTool(ForkRepository(getClient, t)),
-			toolsets.NewServerTool(CreateBranch(getClient, t)),
-			toolsets.NewServerTool(PushFiles(getClient, t)),
-			toolsets.NewServerTool(DeleteFile(getClient, t)),
+			toolsets.NewServerTool(CreateOrUpdateFileWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(CreateRepositoryWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ForkRepositoryWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(CreateBranchWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(PushFilesWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(DeleteFileWithPermissionCheck(getClient, t, repoChecker)),
 		).
 		AddResourceTemplates(
 			toolsets.NewServerResourceTemplate(GetRepositoryResourceContent(getClient, getRawClient, t)),
@@ -52,21 +51,21 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 		)
 	issues := toolsets.NewToolset("issues", "GitHub Issues related tools").
 		AddReadTools(
-			toolsets.NewServerTool(GetIssue(getClient, t)),
+			toolsets.NewServerTool(GetIssueWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(SearchIssues(getClient, t)),
 			toolsets.NewServerTool(ListIssues(getGQLClient, t)),
-			toolsets.NewServerTool(GetIssueComments(getClient, t)),
-			toolsets.NewServerTool(ListIssueTypes(getClient, t)),
-			toolsets.NewServerTool(ListSubIssues(getClient, t)),
+			toolsets.NewServerTool(GetIssueCommentsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListIssueTypesWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListSubIssuesWithPermissionCheck(getClient, t, repoChecker)),
 		).
 		AddWriteTools(
-			toolsets.NewServerTool(CreateIssue(getClient, t)),
-			toolsets.NewServerTool(AddIssueComment(getClient, t)),
-			toolsets.NewServerTool(UpdateIssue(getClient, t)),
+			toolsets.NewServerTool(CreateIssueWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(AddIssueCommentWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(UpdateIssueWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(AssignCopilotToIssue(getGQLClient, t)),
-			toolsets.NewServerTool(AddSubIssue(getClient, t)),
-			toolsets.NewServerTool(RemoveSubIssue(getClient, t)),
-			toolsets.NewServerTool(ReprioritizeSubIssue(getClient, t)),
+			toolsets.NewServerTool(AddSubIssueWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(RemoveSubIssueWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ReprioritizeSubIssueWithPermissionCheck(getClient, t, repoChecker)),
 		).AddPrompts(
 		toolsets.NewServerPrompt(AssignCodingAgentPrompt(t)),
 		toolsets.NewServerPrompt(IssueToFixWorkflowPrompt(t)),
@@ -81,43 +80,43 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 		)
 	pullRequests := toolsets.NewToolset("pull_requests", "GitHub Pull Request related tools").
 		AddReadTools(
-			toolsets.NewServerTool(GetPullRequest(getClient, t)),
-			toolsets.NewServerTool(ListPullRequests(getClient, t)),
-			toolsets.NewServerTool(GetPullRequestFiles(getClient, t)),
+			toolsets.NewServerTool(GetPullRequestWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListPullRequestsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetPullRequestFilesWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(SearchPullRequests(getClient, t)),
-			toolsets.NewServerTool(GetPullRequestStatus(getClient, t)),
-			toolsets.NewServerTool(GetPullRequestComments(getClient, t)),
-			toolsets.NewServerTool(GetPullRequestReviews(getClient, t)),
-			toolsets.NewServerTool(GetPullRequestDiff(getClient, t)),
+			toolsets.NewServerTool(GetPullRequestStatusWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetPullRequestCommentsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetPullRequestReviewsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetPullRequestDiffWithPermissionCheck(getClient, t, repoChecker)),
 		).
 		AddWriteTools(
-			toolsets.NewServerTool(MergePullRequest(getClient, t)),
-			toolsets.NewServerTool(UpdatePullRequestBranch(getClient, t)),
-			toolsets.NewServerTool(CreatePullRequest(getClient, t)),
-			toolsets.NewServerTool(UpdatePullRequest(getClient, getGQLClient, t)),
-			toolsets.NewServerTool(RequestCopilotReview(getClient, t)),
+			toolsets.NewServerTool(MergePullRequestWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(UpdatePullRequestBranchWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(CreatePullRequestWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(UpdatePullRequestWithPermissionCheck(getClient, getGQLClient, t, repoChecker)),
+			toolsets.NewServerTool(RequestCopilotReviewWithPermissionCheck(getClient, t, repoChecker)),
 
 			// Reviews
-			toolsets.NewServerTool(CreateAndSubmitPullRequestReview(getGQLClient, t)),
-			toolsets.NewServerTool(CreatePendingPullRequestReview(getGQLClient, t)),
-			toolsets.NewServerTool(AddCommentToPendingReview(getGQLClient, t)),
-			toolsets.NewServerTool(SubmitPendingPullRequestReview(getGQLClient, t)),
-			toolsets.NewServerTool(DeletePendingPullRequestReview(getGQLClient, t)),
+			toolsets.NewServerTool(CreateAndSubmitPullRequestReviewWithPermissionCheck(getGQLClient, t, repoChecker)),
+			toolsets.NewServerTool(CreatePendingPullRequestReviewWithPermissionCheck(getGQLClient, t, repoChecker)),
+			toolsets.NewServerTool(AddCommentToPendingReviewWithPermissionCheck(getGQLClient, t, repoChecker)),
+			toolsets.NewServerTool(SubmitPendingPullRequestReviewWithPermissionCheck(getGQLClient, t, repoChecker)),
+			toolsets.NewServerTool(DeletePendingPullRequestReviewWithPermissionCheck(getGQLClient, t, repoChecker)),
 		)
 	codeSecurity := toolsets.NewToolset("code_security", "Code security related tools, such as GitHub Code Scanning").
 		AddReadTools(
-			toolsets.NewServerTool(GetCodeScanningAlert(getClient, t)),
-			toolsets.NewServerTool(ListCodeScanningAlerts(getClient, t)),
+			toolsets.NewServerTool(GetCodeScanningAlertWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListCodeScanningAlertsWithPermissionCheck(getClient, t, repoChecker)),
 		)
 	secretProtection := toolsets.NewToolset("secret_protection", "Secret protection related tools, such as GitHub Secret Scanning").
 		AddReadTools(
-			toolsets.NewServerTool(GetSecretScanningAlert(getClient, t)),
-			toolsets.NewServerTool(ListSecretScanningAlerts(getClient, t)),
+			toolsets.NewServerTool(GetSecretScanningAlertWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListSecretScanningAlertsWithPermissionCheck(getClient, t, repoChecker)),
 		)
 	dependabot := toolsets.NewToolset("dependabot", "Dependabot tools").
 		AddReadTools(
-			toolsets.NewServerTool(GetDependabotAlert(getClient, t)),
-			toolsets.NewServerTool(ListDependabotAlerts(getClient, t)),
+			toolsets.NewServerTool(GetDependabotAlertWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListDependabotAlertsWithPermissionCheck(getClient, t, repoChecker)),
 		)
 
 	notifications := toolsets.NewToolset("notifications", "GitHub Notifications related tools").
@@ -129,7 +128,7 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 			toolsets.NewServerTool(DismissNotification(getClient, t)),
 			toolsets.NewServerTool(MarkAllNotificationsRead(getClient, t)),
 			toolsets.NewServerTool(ManageNotificationSubscription(getClient, t)),
-			toolsets.NewServerTool(ManageRepositoryNotificationSubscription(getClient, t)),
+			toolsets.NewServerTool(ManageRepositoryNotificationSubscriptionWithPermissionCheck(getClient, t, repoChecker)),
 		)
 
 	discussions := toolsets.NewToolset("discussions", "GitHub Discussions related tools").
@@ -142,29 +141,29 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 
 	actions := toolsets.NewToolset("actions", "GitHub Actions workflows and CI/CD operations").
 		AddReadTools(
-			toolsets.NewServerTool(ListWorkflows(getClient, t)),
-			toolsets.NewServerTool(ListWorkflowRuns(getClient, t)),
-			toolsets.NewServerTool(GetWorkflowRun(getClient, t)),
-			toolsets.NewServerTool(GetWorkflowRunLogs(getClient, t)),
-			toolsets.NewServerTool(ListWorkflowJobs(getClient, t)),
-			toolsets.NewServerTool(GetJobLogs(getClient, t, contentWindowSize)),
-			toolsets.NewServerTool(ListWorkflowRunArtifacts(getClient, t)),
-			toolsets.NewServerTool(DownloadWorkflowRunArtifact(getClient, t)),
-			toolsets.NewServerTool(GetWorkflowRunUsage(getClient, t)),
+			toolsets.NewServerTool(ListWorkflowsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListWorkflowRunsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetWorkflowRunWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetWorkflowRunLogsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(ListWorkflowJobsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetJobLogsWithPermissionCheck(getClient, t, contentWindowSize, repoChecker)),
+			toolsets.NewServerTool(ListWorkflowRunArtifactsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(DownloadWorkflowRunArtifactWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(GetWorkflowRunUsageWithPermissionCheck(getClient, t, repoChecker)),
 		).
 		AddWriteTools(
-			toolsets.NewServerTool(RunWorkflow(getClient, t)),
-			toolsets.NewServerTool(RerunWorkflowRun(getClient, t)),
-			toolsets.NewServerTool(RerunFailedJobs(getClient, t)),
-			toolsets.NewServerTool(CancelWorkflowRun(getClient, t)),
-			toolsets.NewServerTool(DeleteWorkflowRunLogs(getClient, t)),
+			toolsets.NewServerTool(RunWorkflowWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(RerunWorkflowRunWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(RerunFailedJobsWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(CancelWorkflowRunWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(DeleteWorkflowRunLogsWithPermissionCheck(getClient, t, repoChecker)),
 		)
 
 	securityAdvisories := toolsets.NewToolset("security_advisories", "Security advisories related tools").
 		AddReadTools(
 			toolsets.NewServerTool(ListGlobalSecurityAdvisories(getClient, t)),
 			toolsets.NewServerTool(GetGlobalSecurityAdvisory(getClient, t)),
-			toolsets.NewServerTool(ListRepositorySecurityAdvisories(getClient, t)),
+			toolsets.NewServerTool(ListRepositorySecurityAdvisoriesWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(ListOrgRepositorySecurityAdvisories(getClient, t)),
 		)
 
