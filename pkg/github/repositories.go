@@ -795,6 +795,9 @@ func ForkRepository(getClient GetClientFn, t translations.TranslationHelperFunc)
 			mcp.WithString("organization",
 				mcp.Description("Organization to fork to"),
 			),
+			mcp.WithString("name",
+				mcp.Description("Custom name for the forked repository"),
+			),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			owner, err := RequiredParam[string](request, "owner")
@@ -809,10 +812,17 @@ func ForkRepository(getClient GetClientFn, t translations.TranslationHelperFunc)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			name, err := OptionalParam[string](request, "name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
 			opts := &github.RepositoryCreateForkOptions{}
 			if org != "" {
 				opts.Organization = org
+			}
+			if name != "" {
+				opts.Name = name
 			}
 
 			client, err := getClient(ctx)
@@ -845,6 +855,76 @@ func ForkRepository(getClient GetClientFn, t translations.TranslationHelperFunc)
 			// Return minimal response with just essential information
 			minimalResponse := MinimalResponse{
 				URL: forkedRepo.GetHTMLURL(),
+			}
+
+			r, err := json.Marshal(minimalResponse)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// RenameRepository creates a tool to rename a repository.
+func RenameRepository(getClient GetClientFn, t translations.TranslationHelperFunc) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("rename_repository",
+			mcp.WithDescription(t("TOOL_RENAME_REPOSITORY_DESCRIPTION", "Rename a GitHub repository")),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				Title:        t("TOOL_RENAME_REPOSITORY_USER_TITLE", "Rename repository"),
+				ReadOnlyHint: ToBoolPtr(false),
+			}),
+			mcp.WithString("owner",
+				mcp.Required(),
+				mcp.Description("Repository owner (username or organization)"),
+			),
+			mcp.WithString("repo",
+				mcp.Required(),
+				mcp.Description("Current repository name"),
+			),
+			mcp.WithString("new_name",
+				mcp.Required(),
+				mcp.Description("New repository name"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			owner, err := RequiredParam[string](request, "owner")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			repo, err := RequiredParam[string](request, "repo")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			newName, err := RequiredParam[string](request, "new_name")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			client, err := getClient(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get GitHub client: %w", err)
+			}
+
+			// Create update object with new name
+			updateRepo := &github.Repository{
+				Name: github.String(newName),
+			}
+
+			// Update the repository
+			updatedRepo, resp, err := client.Repositories.Edit(ctx, owner, repo, updateRepo)
+			if err != nil {
+				return ghErrors.NewGitHubAPIErrorResponse(ctx,
+					"failed to rename repository",
+					resp,
+					err,
+				), nil
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			// Return minimal response with new URL
+			minimalResponse := MinimalResponse{
+				URL: updatedRepo.GetHTMLURL(),
 			}
 
 			r, err := json.Marshal(minimalResponse)

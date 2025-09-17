@@ -836,8 +836,14 @@ The following sets of tools are available (all are on by default):
 
 - **fork_repository** - Fork repository
   - `organization`: Organization to fork to (string, optional)
+  - `name`: Custom name for the forked repository (string, optional)
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
+
+- **rename_repository** - Rename repository
+  - `owner`: Repository owner (username or organization) (string, required)
+  - `repo`: Current repository name (string, required)
+  - `new_name`: New repository name (string, required)
 
 - **get_commit** - Get commit details
   - `include_diff`: Whether to include file diffs and stats in the response. Default is true. (boolean, optional)

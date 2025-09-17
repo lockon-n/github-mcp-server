@@ -79,6 +79,12 @@ func ForkRepositoryWithPermissionCheck(getClient GetClientFn, t translations.Tra
 	return originalTool, CreatePermissionCheckedTool(originalTool, originalHandler, repoChecker)
 }
 
+// RenameRepositoryWithPermissionCheck creates a tool to rename repository with permission checking
+func RenameRepositoryWithPermissionCheck(getClient GetClientFn, t translations.TranslationHelperFunc, repoChecker *RepoPermissionChecker) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	originalTool, originalHandler := RenameRepository(getClient, t)
+	return originalTool, CreatePermissionCheckedTool(originalTool, originalHandler, repoChecker)
+}
+
 // CreateBranchWithPermissionCheck creates a tool to create branch with permission checking
 func CreateBranchWithPermissionCheck(getClient GetClientFn, t translations.TranslationHelperFunc, repoChecker *RepoPermissionChecker) (tool mcp.Tool, handler server.ToolHandlerFunc) {
 	originalTool, originalHandler := CreateBranch(getClient, t)

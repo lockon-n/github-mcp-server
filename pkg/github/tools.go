@@ -38,6 +38,7 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 			toolsets.NewServerTool(CreateOrUpdateFileWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(CreateRepositoryWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(ForkRepositoryWithPermissionCheck(getClient, t, repoChecker)),
+			toolsets.NewServerTool(RenameRepositoryWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(CreateBranchWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(PushFilesWithPermissionCheck(getClient, t, repoChecker)),
 			toolsets.NewServerTool(DeleteFileWithPermissionCheck(getClient, t, repoChecker)),

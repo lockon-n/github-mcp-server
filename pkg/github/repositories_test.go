@@ -384,6 +384,108 @@ func Test_ForkRepository(t *testing.T) {
 	}
 }
 
+func Test_RenameRepository(t *testing.T) {
+	// Verify tool definition once
+	mockClient := github.NewClient(nil)
+	tool, _ := RenameRepository(stubGetClientFn(mockClient), translations.NullTranslationHelper)
+
+	assert.Equal(t, "rename_repository", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.Contains(t, tool.InputSchema.Properties, "owner")
+	assert.Contains(t, tool.InputSchema.Properties, "repo")
+	assert.Contains(t, tool.InputSchema.Properties, "new_name")
+	assert.ElementsMatch(t, tool.InputSchema.Required, []string{"owner", "repo", "new_name"})
+
+	// Setup mock renamed repo for success case
+	mockRenamedRepo := &github.Repository{
+		ID:       github.Ptr(int64(123456)),
+		Name:     github.Ptr("new-repo-name"),
+		FullName: github.Ptr("owner/new-repo-name"),
+		Owner: &github.User{
+			Login: github.Ptr("owner"),
+		},
+		HTMLURL:       github.Ptr("https://github.com/owner/new-repo-name"),
+		DefaultBranch: github.Ptr("main"),
+	}
+
+	tests := []struct {
+		name           string
+		mockedClient   *http.Client
+		requestArgs    map[string]interface{}
+		expectError    bool
+		expectedRepo   *github.Repository
+		expectedErrMsg string
+	}{
+		{
+			name: "successful repository rename",
+			mockedClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatchHandler(
+					mock.PatchReposByOwnerByRepo,
+					mockResponse(t, http.StatusOK, mockRenamedRepo),
+				),
+			),
+			requestArgs: map[string]interface{}{
+				"owner":    "owner",
+				"repo":     "repo",
+				"new_name": "new-repo-name",
+			},
+			expectError:  false,
+			expectedRepo: mockRenamedRepo,
+		},
+		{
+			name: "repository rename fails",
+			mockedClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatchHandler(
+					mock.PatchReposByOwnerByRepo,
+					mockResponse(t, http.StatusForbidden, nil),
+				),
+			),
+			requestArgs: map[string]interface{}{
+				"owner":    "owner",
+				"repo":     "repo",
+				"new_name": "new-repo-name",
+			},
+			expectError:    true,
+			expectedErrMsg: "failed to rename repository",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup client with mock
+			client := github.NewClient(tc.mockedClient)
+			_, handler := RenameRepository(stubGetClientFn(client), translations.NullTranslationHelper)
+
+			// Create call request
+			request := createMCPRequest(tc.requestArgs)
+
+			// Call handler
+			result, err := handler(context.Background(), request)
+
+			// Verify results
+			if tc.expectError {
+				require.NoError(t, err)
+				require.True(t, result.IsError)
+				errorContent := getErrorResult(t, result)
+				assert.Contains(t, errorContent.Text, tc.expectedErrMsg)
+				return
+			}
+
+			require.NoError(t, err)
+			require.False(t, result.IsError)
+
+			// Parse the result and get the text content if no error
+			textContent := getTextResult(t, result)
+
+			// Validate the returned minimal response
+			var minimalResponse MinimalResponse
+			err = json.Unmarshal([]byte(textContent.Text), &minimalResponse)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedRepo.GetHTMLURL(), minimalResponse.URL)
+		})
+	}
+}
+
 func Test_CreateBranch(t *testing.T) {
 	// Verify tool definition once
 	mockClient := github.NewClient(nil)
