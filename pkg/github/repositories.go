@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
@@ -642,8 +641,9 @@ func GetFileContents(getClient GetClientFn, getRawClient raw.GetRawClientFn, t t
 			// If the path is (most likely) not to be a directory, we will
 			// first try to get the raw content from the GitHub raw content API.
 			if path != "" && !strings.HasSuffix(path, "/") {
-				// First, get file info from Contents API to retrieve SHA
+				// First, get file info from Contents API to retrieve SHA and size
 				var fileSHA string
+				var fileSize int
 				opts := &github.RepositoryContentGetOptions{Ref: ref}
 				fileContent, _, respContents, err := client.Repositories.GetContents(ctx, owner, repo, path, opts)
 				if respContents != nil {
@@ -660,6 +660,31 @@ func GetFileContents(getClient GetClientFn, getRawClient raw.GetRawClientFn, t t
 					return mcp.NewToolResultError("file content SHA is nil"), nil
 				}
 				fileSHA = *fileContent.SHA
+				fileSize = fileContent.GetSize()
+
+				// Check file size - if larger than 5MB, return metadata only
+				const maxFileSize = 5 * 1024 * 1024 // 5MB
+				if fileSize > maxFileSize {
+					// Return file metadata for large files
+					fileResponse := map[string]interface{}{
+						"type":         "file",
+						"encoding":     "none",
+						"size":         fileSize,
+						"name":         fileContent.GetName(),
+						"path":         path,
+						"content":      "", // Empty content for large files
+						"sha":          fileSHA,
+						"url":          fileContent.GetURL(),
+						"git_url":      fileContent.GetGitURL(),
+						"html_url":     fileContent.GetHTMLURL(),
+						"download_url": fileContent.GetDownloadURL(),
+					}
+					r, err := json.Marshal(fileResponse)
+					if err != nil {
+						return mcp.NewToolResultError("failed to marshal file response"), nil
+					}
+					return mcp.NewToolResultText(string(r)), nil
+				}
 
 				rawClient, err := getRawClient(ctx)
 				if err != nil {
@@ -681,48 +706,37 @@ func GetFileContents(getClient GetClientFn, getRawClient raw.GetRawClientFn, t t
 					}
 					contentType := resp.Header.Get("Content-Type")
 
-					var resourceURI string
-					switch {
-					case sha != "":
-						resourceURI, err = url.JoinPath("repo://", owner, repo, "sha", sha, "contents", path)
-						if err != nil {
-							return nil, fmt.Errorf("failed to create resource URI: %w", err)
-						}
-					case ref != "":
-						resourceURI, err = url.JoinPath("repo://", owner, repo, ref, "contents", path)
-						if err != nil {
-							return nil, fmt.Errorf("failed to create resource URI: %w", err)
-						}
-					default:
-						resourceURI, err = url.JoinPath("repo://", owner, repo, "contents", path)
-						if err != nil {
-							return nil, fmt.Errorf("failed to create resource URI: %w", err)
-						}
+					// Create a consistent structure for the file content response
+					fileResponse := map[string]interface{}{
+						"type":         "file",
+						"size":         fileSize,
+						"name":         fileContent.GetName(),
+						"path":         path,
+						"sha":          fileSHA,
+						"url":          fileContent.GetURL(),
+						"git_url":      fileContent.GetGitURL(),
+						"html_url":     fileContent.GetHTMLURL(),
+						"download_url": fileContent.GetDownloadURL(),
 					}
 
-					if strings.HasPrefix(contentType, "application") || strings.HasPrefix(contentType, "text") {
-						result := mcp.TextResourceContents{
-							URI:      resourceURI,
-							Text:     string(body),
-							MIMEType: contentType,
-						}
-						// Include SHA in the result metadata
-						if fileSHA != "" {
-							return mcp.NewToolResultResource(fmt.Sprintf("successfully downloaded text file (SHA: %s)", fileSHA), result), nil
-						}
-						return mcp.NewToolResultResource("successfully downloaded text file", result), nil
+					// Determine content encoding based on content type
+					if strings.HasPrefix(contentType, "text") || strings.HasPrefix(contentType, "application/json") ||
+					   strings.HasPrefix(contentType, "application/xml") || strings.HasPrefix(contentType, "application/javascript") {
+						// For text files, include the content as text
+						fileResponse["content"] = string(body)
+						fileResponse["encoding"] = "text"
+					} else {
+						// For binary files, include the content as base64
+						fileResponse["content"] = base64.StdEncoding.EncodeToString(body)
+						fileResponse["encoding"] = "base64"
 					}
 
-					result := mcp.BlobResourceContents{
-						URI:      resourceURI,
-						Blob:     base64.StdEncoding.EncodeToString(body),
-						MIMEType: contentType,
+					// Marshal the response to JSON
+					r, err := json.Marshal(fileResponse)
+					if err != nil {
+						return mcp.NewToolResultError("failed to marshal file response"), nil
 					}
-					// Include SHA in the result metadata
-					if fileSHA != "" {
-						return mcp.NewToolResultResource(fmt.Sprintf("successfully downloaded binary file (SHA: %s)", fileSHA), result), nil
-					}
-					return mcp.NewToolResultResource("successfully downloaded binary file", result), nil
+					return mcp.NewToolResultText(string(r)), nil
 
 				}
 			}
@@ -735,7 +749,12 @@ func GetFileContents(getClient GetClientFn, getRawClient raw.GetRawClientFn, t t
 				_, dirContent, resp, err := client.Repositories.GetContents(ctx, owner, repo, path, opts)
 				if err == nil && resp.StatusCode == http.StatusOK {
 					defer func() { _ = resp.Body.Close() }()
-					r, err := json.Marshal(dirContent)
+					// Convert to minimal content to avoid serialization issues
+					minimalContents := make([]MinimalRepositoryContent, 0, len(dirContent))
+					for _, content := range dirContent {
+						minimalContents = append(minimalContents, convertToMinimalRepositoryContent(content))
+					}
+					r, err := json.Marshal(minimalContents)
 					if err != nil {
 						return mcp.NewToolResultError("failed to marshal response"), nil
 					}

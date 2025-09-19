@@ -194,11 +194,37 @@ func convertToMinimalCommit(commit *github.RepositoryCommit, includeDiffs bool) 
 	return minimalCommit
 }
 
+// MinimalRepositoryContent represents minimal file/directory content information
+type MinimalRepositoryContent struct {
+	Type        string `json:"type,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Size        int    `json:"size,omitempty"`
+	SHA         string `json:"sha,omitempty"`
+	URL         string `json:"url,omitempty"`
+	HTMLURL     string `json:"html_url,omitempty"`
+	DownloadURL string `json:"download_url,omitempty"`
+}
+
 // convertToMinimalBranch converts a GitHub API Branch to MinimalBranch
 func convertToMinimalBranch(branch *github.Branch) MinimalBranch {
 	return MinimalBranch{
 		Name:      branch.GetName(),
 		SHA:       branch.GetCommit().GetSHA(),
 		Protected: branch.GetProtected(),
+	}
+}
+
+// convertToMinimalRepositoryContent converts GitHub API RepositoryContent to MinimalRepositoryContent
+func convertToMinimalRepositoryContent(content *github.RepositoryContent) MinimalRepositoryContent {
+	return MinimalRepositoryContent{
+		Type:        content.GetType(),
+		Name:        content.GetName(),
+		Path:        content.GetPath(),
+		Size:        content.GetSize(),
+		SHA:         content.GetSHA(),
+		URL:         content.GetURL(),
+		HTMLURL:     content.GetHTMLURL(),
+		DownloadURL: content.GetDownloadURL(),
 	}
 }
